@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Work Report</title>
+<meta name="author" content="(Mriganka Basu Roy Chowdhury)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js/dist/reveal.css"/>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js/dist/theme/moon.css" id="theme"/>
+
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = 'https://cdn.jsdelivr.net/npm/reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide"><h1>Work Report</h1><h4>Mriganka Basu Roy Chowdhury</h4>
+</section>
+
+<section>
+<section id="slide-orgd4c2a2f">
+<h2 id="orgd4c2a2f">What we wanted to do</h2>
+<ul>
+<li class="fragment appear">Sprinklr has a few places where auto-completion can be useful.</li>
+<li class="fragment appear">One example would be the new News Stories feature.</li>
+<li class="fragment appear">A user can search for, say, <code>covid india</code>.</li>
+<li class="fragment appear">Currently, it displays articles which have <code>covid</code> or <code>india</code>, suitably weighted by occurence positions (title/body etc.)</li>
+
+</ul>
+
+</section>
+<section id="slide-org817493a">
+<h3 id="org817493a">Need something that:</h3>
+<ul>
+<li class="fragment appear">Suggests more tags: <code>covid india</code> → <code>covid india cases</code></li>
+<li class="fragment appear">Also corrects mistakes: <code>cvd</code> → <code>covid</code></li>
+<li class="fragment appear">Completes words: <code>ind</code> → <code>india</code>.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgb18dea9">
+<h2 id="orgb18dea9"><code>auto-suggest</code></h2>
+<div class="outline-text-2" id="text-orgb18dea9">
+</div>
+</section>
+<section id="slide-org35d938a">
+<h3 id="org35d938a">Demo</h3>
+</section>
+<section id="slide-org400840a">
+<h3 id="org400840a">How it works</h3>
+<ul>
+<li class="fragment appear">Has 3 major components</li>
+<li class="fragment appear"><code>Fuzzy Corrector</code>, <code>Word Completer</code>, <code>Tag Suggestor</code>.</li>
+<li class="fragment appear">Exposed as a REST API.</li>
+<li class="fragment appear">Which can be fed lists of strings.</li>
+<li class="fragment appear">And can be used to complete/correct phrases.</li>
+
+</ul>
+
+</section>
+<section id="slide-orge644f0e">
+<h3 id="orge644f0e">Preprocessing</h3>
+<ul>
+<li class="fragment appear">Remove words of little content, like &ldquo;if&rdquo;, &ldquo;so&rdquo;, &ldquo;a&rdquo; etc. Eg. &ldquo;saw cat jump over fence&rdquo; from &ldquo;i saw a cat jump over the fence&rdquo;.</li>
+<li class="fragment appear">Standardize quotes, punctuation etc &#x2013; was a bug earlier.</li>
+<li class="fragment appear">Pick \(\leq k\) -letter combinations from these words, <b>in order</b>, as phrases. \(k = 3\) by default.</li>
+<li class="fragment appear">Each string has a quota of the number of phrases, set to ~50 by default.</li>
+<li class="fragment appear">Pick random phrases of length \(k + 1\) till we exhaust this quota.</li>
+
+</ul>
+
+</section>
+<section id="slide-orgfc488e9">
+<h3 id="orgfc488e9">Fuzzy Corrector</h3>
+<ul>
+<li class="fragment appear">Converts words into a phonetic representation.</li>
+<li class="fragment appear">A representation of how it sounds.</li>
+<li class="fragment appear">Currently using <code>Soundex</code>.</li>
+<li class="fragment appear">This can convert &ldquo;Donald&rdquo; → &ldquo;D543&rdquo;. Also &ldquo;Dnald&rdquo; → &ldquo;D543&rdquo;.</li>
+<li class="fragment appear">When we need to correct a word, just return the top words that sound the same.</li>
+<li class="fragment appear">So missing out vowels has no effect, and can be fixed.</li>
+<li class="fragment appear">Also consonants that don&rsquo;t make much of a difference.</li>
+
+</ul>
+
+</section>
+<section id="slide-org74e94a2">
+<h3 id="org74e94a2">Word Completer</h3>
+<ul>
+<li class="fragment appear">Uses a trie for completing words</li>
+<li class="fragment appear">Each node also stores how many times it has been visited (popularity)</li>
+<li class="fragment appear">And also the top few completions (i.e. most popular descendants in the trie).</li>
+
+</ul>
+
+</section>
+<section id="slide-org6ac905a">
+<h3 id="org6ac905a">Tag Suggestor</h3>
+<ul>
+<li class="fragment appear">Maintains a trie, where each edge is a word.</li>
+<li class="fragment appear">We insert phrases (short ordered sublists of sentences in input) into the trie.</li>
+<li class="fragment appear">Given some words, it tries to find the best completions using this trie.</li>
+<li class="fragment appear">Also tries deleting some words from the phrase before doing the above.</li>
+<li class="fragment appear">Ranking is decided by the &ldquo;importance&rdquo; of the subphrase that is being completed.</li>
+
+</ul>
+
+</section>
+<section id="slide-orgf5b5cbb">
+<h3 id="orgf5b5cbb">Data Storage</h3>
+<ul>
+<li class="fragment appear">Currently using an in-memory Guava Cache of ~ 2 GB size.</li>
+<li class="fragment appear">And a Mongo store, which persists all keys.</li>
+<li class="fragment appear">Mongo persistence task runs out of the main thread.</li>
+<li class="fragment appear">All important keys that are not found in the cache are reloaded once found in Mongo.</li>
+<li class="fragment appear">So, repeated similar queries take little time after the first.</li>
+
+</ul>
+
+</section>
+<section id="slide-org29a7a75">
+<h3 id="org29a7a75">Dependency Diagram</h3>
+
+<div class="figure">
+<p><img src="diag.png" alt="diag.png" width="600px" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org06ea91e">
+<h2 id="org06ea91e">Characteristics</h2>
+<div class="outline-text-2" id="text-org06ea91e">
+</div>
+</section>
+<section id="slide-org3a79679">
+<h3 id="org3a79679">Test Set</h3>
+<ul>
+<li class="fragment appear">Contains a few tests for checking accuracy.</li>
+<li class="fragment appear">A 10000 + 10000 set of news titles in English</li>
+<li class="fragment appear">A 100 set of news titles in other languages like Russian and Spanish to check Unicode support.</li>
+<li class="fragment appear">These are fed to the system via the <code>index/</code> route.</li>
+
+</ul>
+
+</section>
+<section id="slide-org924617e">
+<h3 id="org924617e">Performance</h3>
+<ul>
+<li class="fragment appear">All tests are on my computer (8 GB / i5 8th), with the initial version of the code. Can be found at <a href="https://github.com/mbrc12/auto-suggest">https://github.com/mbrc12/auto-suggest</a> (<code>redisless-tags</code> branch)</li>
+<li class="fragment appear">Around 2 - 2.5 minutes to index a 10000 set.</li>
+<li class="fragment appear">Completion latency is 30 ms on average</li>
+<li class="fragment appear">Under a complete restart, the latency goes upto ~100 ms at first, but drops as the cache starts filling up.</li>
+<li class="fragment appear">Cache can hold 10-15 days worth of data in memory itself.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgf2ccbb9">
+<h2 id="orgf2ccbb9">Further Work</h2>
+<div class="outline-text-2" id="text-orgf2ccbb9">
+</div>
+</section>
+<section id="slide-org25a2332">
+<h3 id="org25a2332">Phrase completions</h3>
+<ul>
+<li class="fragment appear">Right now, we suggest only tags.</li>
+<li class="fragment appear">But, it is also possible to complete phrases, like Gmail does in email composition.</li>
+<li class="fragment appear">A preliminary version is implemented in the above repository in <code>multi-lang</code> and <code>phrase-suggest</code> branches.</li>
+
+</ul>
+</section>
+<section id="slide-org0a130bf">
+<h3 id="org0a130bf">Fuzzy Correction - I:</h3>
+<ul>
+<li class="fragment appear">An useful improvement would be to fuzzy correct words of other languages like Japanese or Spanish.</li>
+<li class="fragment appear">Under my current approach, this requires phonetic content algorithms of other languages. This is a relatively under-developed area.</li>
+<li class="fragment appear">Edit distance approaches do not work in Japanese for example, because Kanji characters represent a word/idea, as opposed to a sound like in English.</li>
+<li class="fragment appear">It also doesn&rsquo;t work well in English, as it is insensitive to meanings. Words with small edit distance mean vastly unrelated things, <code>night</code> and <code>right</code>.</li>
+
+</ul>
+</section>
+<section id="slide-org3786561">
+<h3 id="org3786561">Fuzzy Correction - II:</h3>
+<ul>
+<li class="fragment appear">In English, it might be possible to do better suggestions using Soundex alone.</li>
+<li class="fragment appear">The idea is to change a few characters in the Soundex representation itself.</li>
+<li class="fragment appear">However, this will:
+<ul>
+<li>Increase latency</li>
+<li>And if wrong characters are substituted, the suggested words might be useless.</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org8961fc9">
+<h2 id="org8961fc9">Other Projects</h2>
+<ul>
+<li class="fragment appear">Some projects on Spring and Patterns in Java.</li>
+<li class="fragment appear">An application that fetches titles (concurrently) from <a href="https://newsriver.io">https://newsriver.io</a> and pushes them to Kafka, and consumed on the other side by a (concurrent) consumer.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgb6e44ea">
+<h2 id="orgb6e44ea">Thanks</h2>
+<ul>
+<li class="fragment appear">Thanks to Tejasv Gupta for being available throughout the duration and guiding us in every step. And also for suggesting such an interesting problem!</li>
+<li class="fragment appear">Also thanks to Shubham and Sudhanshu for some really interesting discussions.</li>
+<li class="fragment appear">Finally, thanks to Sprinklr for organizing this wonderful internship.</li>
+
+</ul>
+
+
+
+</section>
+</section>
+<section>
+<section id="slide-orgbf49bbd">
+<h2 id="orgbf49bbd">Fin.</h2>
+</section>
+</section>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js/dist/reveal.js"></script>
+
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+controls:false,
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: 'https://cdn.jsdelivr.net/npm/reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: 'https://cdn.jsdelivr.net/npm/reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: 'https://cdn.jsdelivr.net/npm/reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: 'https://cdn.jsdelivr.net/npm/reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: 'https://cdn.jsdelivr.net/npm/reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>
